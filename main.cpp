@@ -38,9 +38,114 @@ struct tree_rules {
 	vector<tree_rules *> nodes;
 };
 
-// signatures
-void apply_reduct_stack(vector<element_struct*> * stack);
+// Signatures
 
+// I- Init Main Stack
+void init_main_stack(vector<element_struct *> * main_stack, string entry);
+
+// - create automate (set predefined syntax)
+struct tree_rules * create_tree_rules();
+tree_rules * get_node_character(tree_rules * node, type_syntax_enum type_syntax);
+
+// - functions to add elements in stack and recursive stack
+void add_element(vector<vector<element_struct*>*> * stacks, char character, type_syntax_enum type_syntax);
+void set_size_dice(vector<vector<element_struct *> *> *stacks, char character, type_syntax_enum type_syntax);
+void add_multiply_and_element(vector<vector<element_struct*>*> * stacks, char character, type_syntax_enum type_syntax);
+void add_decimal_number(vector<vector<element_struct*>*> * stacks, char character, type_syntax_enum type_syntax);
+
+// II- Reduct Main Stack
+void apply_reduct_stack(vector<element_struct*> * stack);
+void reduction(char operator_bin, vector<element_struct *> * stack);
+struct element_struct * reduce_stack(struct element_struct * arg);
+
+// - Evaluator 
+struct element_struct * eval(char operator_bin, struct element_struct * arg1, struct element_struct * arg2);
+vector<dice_element_struct*> * addition_dices(vector<dice_element_struct*> * dice_stack1, vector<dice_element_struct*> * dice_stack2); // suppr
+
+// III- Print Functions 
+void print_tab(int layer);
+void print_stack(vector<element_struct *> * stack, int layer);
+void print_res(vector<element_struct *> *stack);
+
+// IV- Other Functions
+bool compare_dice_element(struct dice_element_struct * dice_element1, struct dice_element_struct * dice_element2);
+
+// Main Funtion
+int main()
+{
+	string expr;
+	getline(cin, expr);
+
+	vector<element_struct *> main_stack;
+	init_main_stack(&main_stack, expr);
+	// print_stack(&main_stack,0);
+	
+	apply_reduct_stack(&main_stack);
+	print_res(&main_stack);
+	return 0;
+}
+
+// Functions
+void init_main_stack(vector<element_struct *> * main_stack, string entry)
+{
+	vector<vector<element_struct *>*> stacks; // contains stacks
+	stacks.push_back(main_stack);	
+	
+	tree_rules * node_tree_rules = nullptr;
+	node_tree_rules = create_tree_rules();
+
+	int index = 0;
+	for (char c : entry) 
+	{
+		index++;
+		type_syntax_enum type_syntax = type_syntax_enum::syntax_error;
+
+		if(c>='0' && c <='9')
+		{
+			type_syntax = type_syntax_enum::integer;
+		}
+
+		if(c == '*' || c == '+' || c == '>' || c == '-')
+		{
+			type_syntax = type_syntax_enum::ope;	
+		}
+
+		if(c == '(') 
+		{
+			type_syntax = type_syntax_enum::open_parenth;
+		}
+
+		if(c == ')')
+		{
+			type_syntax = type_syntax_enum::close_parenth;
+		}
+		if(c == 'd')
+		{
+			type_syntax = type_syntax_enum::dice;
+		}
+		if(type_syntax == type_syntax_enum::syntax_error)
+		{	
+			cerr << "Parsing Error (" << index << "): " << "unrecognised character '" << c << "'" << endl;
+			exit(EXIT_FAILURE);
+		}
+		
+		node_tree_rules = get_node_character(node_tree_rules, type_syntax);
+		if(node_tree_rules == nullptr)
+		{
+			cerr << "Parsing Error (" << index << "): " << "syntax error '" << c << "' follow by character where not allow" << endl;
+			exit(EXIT_FAILURE);
+		}
+		node_tree_rules->ptr_add_stack(&stacks, c,type_syntax);
+	}
+}
+
+void apply_reduct_stack(vector<element_struct*> * stack)
+{
+	reduction('*', stack);
+	reduction('+', stack);
+	reduction('-', stack);
+	reduction('>', stack);
+}
 
 
 void add_element(vector<vector<element_struct*>*> * stacks, char character, type_syntax_enum type_syntax)
@@ -112,6 +217,7 @@ void add_decimal_number(vector<vector<element_struct*>*> * stacks, char characte
 	*res = *res * 10;
 	*res = *res + (character - '0');
 }
+
 vector<dice_element_struct*> * addition_dices(vector<dice_element_struct*> * dice_stack1, vector<dice_element_struct*> * dice_stack2)
 {
 	vector<dice_element_struct*> * dice_res = nullptr;
@@ -140,6 +246,7 @@ vector<dice_element_struct*> * addition_dices(vector<dice_element_struct*> * dic
 	}
 	return dice_res;
 }
+
 struct tree_rules * create_tree_rules()
 {
 	// all nodes
@@ -557,7 +664,33 @@ struct element_struct * eval(char operator_bin, struct element_struct * arg1, st
 		{
 			if (res_arg2->type_element == type_element_enum::number)
 			{
-				cerr << "not implemented multiply dice stack with number" << endl;
+				res->type_element = type_element_enum::dice_stack;
+				int * res_int2 = static_cast<int*>(res_arg2->element);
+				vector<dice_element_struct*> * dice_stack = static_cast<vector<dice_element_struct*>*>(res_arg1->element);
+				
+				vector<dice_element_struct*> * dice_res = nullptr;
+				dice_res = new vector<dice_element_struct*>;
+					
+				int i = *res_int2;
+				if (i < 0) {
+					cerr << "multiply by negative number not implemented" << endl;
+				}
+				if (i == 0)
+				{
+					res->type_element = type_element_enum::number;
+					res->element = new int(0);
+					return res;
+				}
+				
+				for (dice_element_struct * dice_element : *dice_stack) {
+					struct dice_element_struct * dice_element_res = new struct dice_element_struct;
+					dice_element->value = dice_element->value * i; 
+					dice_element->occurence = dice_element->occurence;
+					dice_res->push_back(dice_element);
+				}	
+				
+				res->element = dice_res;
+				return res;
 			}
 			if (res_arg2->type_element == type_element_enum::dice_stack)
 			{
@@ -755,79 +888,4 @@ tree_rules * get_node_character(tree_rules * node, type_syntax_enum type_syntax)
 		}
 	}
 	return nullptr;
-}
-
-void init_main_stack(vector<element_struct *> * main_stack, string entry)
-{
-	vector<vector<element_struct *>*> stacks; // contains stacks
-	stacks.push_back(main_stack);	
-	
-	tree_rules * node_tree_rules = nullptr;
-	node_tree_rules = create_tree_rules();
-
-	int index = 0;
-	for (char c : entry) 
-	{
-		index++;
-		type_syntax_enum type_syntax = type_syntax_enum::syntax_error;
-
-		if(c>='0' && c <='9')
-		{
-			type_syntax = type_syntax_enum::integer;
-		}
-
-		if(c == '*' || c == '+' || c == '>' || c == '-')
-		{
-			type_syntax = type_syntax_enum::ope;	
-		}
-
-		if(c == '(') 
-		{
-			type_syntax = type_syntax_enum::open_parenth;
-		}
-
-		if(c == ')')
-		{
-			type_syntax = type_syntax_enum::close_parenth;
-		}
-		if(c == 'd')
-		{
-			type_syntax = type_syntax_enum::dice;
-		}
-		if(type_syntax == type_syntax_enum::syntax_error)
-		{	
-			cerr << "Parsing Error (" << index << "): " << "unrecognised character '" << c << "'" << endl;
-			exit(EXIT_FAILURE);
-		}
-		
-		node_tree_rules = get_node_character(node_tree_rules, type_syntax);
-		if(node_tree_rules == nullptr)
-		{
-			cerr << "Parsing Error (" << index << "): " << "syntax error '" << c << "' follow by character where not allow" << endl;
-			exit(EXIT_FAILURE);
-		}
-		node_tree_rules->ptr_add_stack(&stacks, c,type_syntax);
-	}
-}
-
-void apply_reduct_stack(vector<element_struct*> * stack)
-{
-	reduction('*', stack);
-	reduction('+', stack);
-	reduction('-', stack);
-	reduction('>', stack);
-}
-
-int main()
-{
-	string expr;
-	getline(cin, expr);
-
-	vector<element_struct *> main_stack;
-	init_main_stack(&main_stack, expr);
-	// print_stack(&main_stack,0);
-	
-	apply_reduct_stack(&main_stack);
-	print_res(&main_stack);
-	return 0;
 }
